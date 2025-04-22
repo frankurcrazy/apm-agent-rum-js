@@ -37,6 +37,10 @@ import {
   ADD_EVENT_LISTENER_STR
 } from '../constants'
 
+// Constants for storing headers and body
+const XHR_HEADERS = Symbol('xhr-headers')
+const XHR_BODY = Symbol('xhr-body')
+
 export function patchXMLHttpRequest(callback) {
   const XMLHttpRequestPrototype = XMLHttpRequest.prototype
   /**
@@ -116,8 +120,24 @@ export function patchXMLHttpRequest(callback) {
           self[XHR_METHOD] = args[0]
           self[XHR_URL] = args[1]
           self[XHR_SYNC] = args[2] === false
+          // Initialize headers storage
+          self[XHR_HEADERS] = {}
         }
         return openNative.apply(self, args)
+      }
+  )
+
+  // Patch setRequestHeader to capture headers
+  const setRequestHeaderNative = patchMethod(
+    XMLHttpRequestPrototype,
+    'setRequestHeader',
+    () =>
+      function (self, args) {
+        if (!self[XHR_IGNORE] && self[XHR_HEADERS]) {
+          const [name, value] = args
+          self[XHR_HEADERS][name] = value
+        }
+        return setRequestHeaderNative.apply(self, args)
       }
   )
 
@@ -130,6 +150,11 @@ export function patchXMLHttpRequest(callback) {
           return sendNative.apply(self, args)
         }
 
+        // Store request body if present
+        if (args.length > 0 && args[0] !== null && args[0] !== undefined) {
+          self[XHR_BODY] = args[0]
+        }
+
         const task = {
           source: XMLHTTPREQUEST,
           state: '',
@@ -139,7 +164,9 @@ export function patchXMLHttpRequest(callback) {
             method: self[XHR_METHOD],
             sync: self[XHR_SYNC],
             url: self[XHR_URL],
-            status: ''
+            status: '',
+            headers: self[XHR_HEADERS],
+            body: self[XHR_BODY]
           }
         }
         try {

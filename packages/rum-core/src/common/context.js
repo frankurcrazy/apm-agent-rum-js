@@ -119,7 +119,7 @@ function getResourceContext(data) {
 }
 
 function getExternalContext(data) {
-  const { url, method, target, response } = data
+  const { url, method, target, response, headers, body } = data
   const parsedUrl = new Url(url)
 
   const destination = getDestination(parsedUrl)
@@ -139,6 +139,42 @@ function getExternalContext(data) {
     statusCode = response.status
   }
   context.http.status_code = statusCode
+
+  // Add headers if available and enabled in config
+  if (headers && Object.keys(headers).length > 0) {
+    const configService = require('./config-service').default
+    const config = configService.getInstance()
+    
+    if (config.get('captureHeaders')) {
+      context.http.request = context.http.request || {}
+      context.http.request.headers = headers
+    }
+    
+    // Add body if available and enabled in config
+    if (body !== undefined && config.get('captureBody')) {
+      context.http.request = context.http.request || {}
+      
+      // Handle different body types
+      if (typeof body === 'string') {
+        context.http.request.body = body
+      } else if (body instanceof FormData) {
+        context.http.request.body = '[FormData]'
+      } else if (body instanceof URLSearchParams) {
+        context.http.request.body = body.toString()
+      } else if (body instanceof Blob || body instanceof ArrayBuffer) {
+        context.http.request.body = '[Binary Data]'
+      } else if (typeof body === 'object') {
+        try {
+          context.http.request.body = JSON.stringify(body)
+        } catch (e) {
+          context.http.request.body = '[Object]'
+        }
+      } else {
+        context.http.request.body = String(body)
+      }
+    }
+  }
+
   return context
 }
 

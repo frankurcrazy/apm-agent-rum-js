@@ -93,6 +93,29 @@ export function patchFetch(callback) {
       return nativeFetch.apply(fetchSelf, args)
     }
 
+    // Capture request headers and body if available
+    let requestHeaders = {}
+    let requestBody = undefined
+
+    // Capture headers from Request object
+    if (request.headers) {
+      // Convert Headers object to plain object
+      if (typeof request.headers.forEach === 'function') {
+        request.headers.forEach((value, key) => {
+          requestHeaders[key] = value
+        })
+      } else if (request.headers instanceof Object) {
+        requestHeaders = { ...request.headers }
+      }
+    }
+
+    // Capture body from init or Request object
+    if (init && init.body !== undefined) {
+      requestBody = init.body
+    } else if (request.body !== undefined) {
+      requestBody = request.body
+    }
+
     const task = {
       source: FETCH,
       state: '',
@@ -101,7 +124,9 @@ export function patchFetch(callback) {
         target: request,
         method: request.method,
         url,
-        aborted: false
+        aborted: false,
+        headers: requestHeaders,
+        body: requestBody
       }
     }
 
